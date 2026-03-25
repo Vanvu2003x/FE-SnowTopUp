@@ -1,0 +1,69 @@
+
+> snowtopup-fe@0.1.0 build
+> next build
+
+   ▲ Next.js 15.3.5
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\cache\webpack\server-production\9.pack_' -> 'D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\cache\webpack\server-production\9.pack'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename 'D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\cache\webpack\client-production\1.pack_' -> 'D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\cache\webpack\client-production\1.pack'
+ ✓ Compiled successfully in 14.0s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/12) ...
+   Generating static pages (3/12) 
+   Generating static pages (6/12) 
+Lỗi kết nối mạng: connect ECONNREFUSED 127.0.0.1:5000
+Không thể tải danh sách game: Error: connect ECONNREFUSED 127.0.0.1:5000
+    at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:5000)
+    at G.from (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\chunks\365.js:1:188240)
+    at y.<anonymous> (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\chunks\365.js:3:9605)
+    at m.<computed> (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\chunks\365.js:1:13365)
+    at aM.request (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\chunks\365.js:3:21292)
+    at async i (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\app\(public)\page.js:1:940)
+    at async n (D:\Web\LaviTopUp\lavitoup\snowtopup-fe\.next\server\app\(public)\page.js:1:9231) {
+  port: 5000,
+  address: '127.0.0.1',
+  syscall: 'connect',
+  code: 'ECONNREFUSED',
+  errno: -4078,
+  config: [Object],
+  request: [Writable],
+  constructor: [Function],
+  toJSON: [Function: toJSON],
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:5000
+      at <unknown> (Error: connect ECONNREFUSED 127.0.0.1:5000) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 5000
+  }
+}
+   Generating static pages (9/12) 
+ ✓ Generating static pages (12/12)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                 Size  First Load JS
+┌ ○ /                                     3.6 kB         149 kB
+├ ○ /_not-found                            977 B         102 kB
+├ ○ /account                             2.86 kB         130 kB
+├ ○ /account/don-hang                    3.48 kB         170 kB
+├ ○ /account/lich-su                     2.19 kB         126 kB
+├ ○ /account/nap-tien                    4.26 kB         170 kB
+├ ○ /account/thong-tin                    2.6 kB         130 kB
+├ ○ /admin                               9.71 kB         176 kB
+├ ○ /auth/login                          3.14 kB         169 kB
+├ ○ /auth/register                       3.13 kB         169 kB
+└ ƒ /categories/topup/[gamecode]         5.12 kB         171 kB
++ First Load JS shared by all             101 kB
+  ├ chunks/4bd1b696-3cd01589f9f6781b.js  53.2 kB
+  ├ chunks/684-e1a00f2deedc4a32.js       46.1 kB
+  └ other shared chunks (total)          1.99 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
