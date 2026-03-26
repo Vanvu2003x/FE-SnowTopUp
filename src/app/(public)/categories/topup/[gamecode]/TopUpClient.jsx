@@ -19,6 +19,12 @@ const baseApiUrl = process.env.NEXT_PUBLIC_API_URL;
 const formatCurrency = (value) =>
     `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))} VND`;
 
+function resolveImageSrc(value) {
+    if (!value) return "";
+    if (String(value).startsWith("http")) return value;
+    return `${baseApiUrl || ""}${value}`;
+}
+
 function normalizeInputFields(game) {
     if (Array.isArray(game?.input_fields) && game.input_fields.length > 0) {
         return game.input_fields.map((field, index) => ({
@@ -143,11 +149,9 @@ export default function TopUpClient({ game, packages = [], allGames = [] }) {
     }
 
     const heroSource = game.poster || game.thumbnail || "";
-    const heroImage = heroSource?.startsWith("http") ? heroSource : `${baseApiUrl}${heroSource || ""}`;
+    const heroImage = resolveImageSrc(heroSource);
     const thumbSource = game.thumbnail || game.poster || "";
-    const thumbImage = thumbSource?.startsWith("http")
-        ? thumbSource
-        : `${baseApiUrl}${thumbSource || ""}`;
+    const thumbImage = resolveImageSrc(thumbSource);
 
     return (
         <div className="space-y-7 pb-20">
@@ -364,11 +368,7 @@ export default function TopUpClient({ game, packages = [], allGames = [] }) {
                                     }`}
                                 >
                                     <img
-                                        src={
-                                            g.thumbnail?.startsWith("http")
-                                                ? g.thumbnail
-                                                : `${baseApiUrl}${g.thumbnail}`
-                                        }
+                                        src={resolveImageSrc(g.thumbnail)}
                                         alt={g.name}
                                         className="h-10 w-10 rounded-lg object-cover shadow-sm"
                                     />

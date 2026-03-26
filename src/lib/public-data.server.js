@@ -1,3 +1,5 @@
+const PUBLIC_DATA_REVALIDATE_SECONDS = 60;
+
 const resolveApiBaseUrl = () =>
     (
         process.env.INTERNAL_API_URL ||
@@ -28,8 +30,7 @@ async function fetchPublicJson(path) {
 
     const response = await fetch(`${baseUrl}${path}`, {
         method: "GET",
-        cache: "no-store",
-        next: { revalidate: 0 },
+        next: { revalidate: PUBLIC_DATA_REVALIDATE_SECONDS },
     });
 
     if (!response.ok) {

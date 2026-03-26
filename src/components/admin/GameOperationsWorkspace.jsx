@@ -1,5 +1,6 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
     FiClock,
@@ -13,6 +14,7 @@ import {
     FiSave,
     FiSettings,
     FiTrash2,
+    FiX,
 } from "react-icons/fi";
 
 import AdminWorkspaceShell from "@/components/admin/AdminWorkspaceShell";
@@ -120,6 +122,7 @@ export default function GameOperationsWorkspace() {
     const [games, setGames] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedGameId, setSelectedGameId] = useState("");
     const [formData, setFormData] = useState(emptyForm);
@@ -145,6 +148,30 @@ export default function GameOperationsWorkspace() {
     useEffect(() => {
         loadWorkspace();
     }, []);
+
+    useEffect(() => {
+        if (!isEditorOpen) return undefined;
+
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [isEditorOpen]);
+
+    useEffect(() => {
+        if (!isEditorOpen) return undefined;
+
+        const handleKeyDown = (event) => {
+            if (event.key === "Escape" && !submitting) {
+                setIsEditorOpen(false);
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [isEditorOpen, submitting]);
 
     async function loadWorkspace(showToast = false) {
         const shouldFlipLoading = !games.length && !refreshing;
@@ -177,6 +204,7 @@ export default function GameOperationsWorkspace() {
         setPosterPreview("");
         setClearThumbnailOverride(false);
         setClearPosterOverride(false);
+        setIsEditorOpen(true);
     }
 
     function openEdit(game) {
@@ -194,6 +222,12 @@ export default function GameOperationsWorkspace() {
         setPosterPreview(toImageSrc(game?.poster));
         setClearThumbnailOverride(false);
         setClearPosterOverride(false);
+        setIsEditorOpen(true);
+    }
+
+    function closeEditor() {
+        if (submitting) return;
+        setIsEditorOpen(false);
     }
 
     function handleFilePick(event, type) {
@@ -329,7 +363,15 @@ export default function GameOperationsWorkspace() {
             await deleteGame(game.id);
             await loadWorkspace();
             if (selectedGameId === game.id) {
-                openCreate();
+                setSelectedGameId("");
+                setFormData(emptyForm);
+                setThumbnailFile(null);
+                setPosterFile(null);
+                setThumbnailPreview("");
+                setPosterPreview("");
+                setClearThumbnailOverride(false);
+                setClearPosterOverride(false);
+                setIsEditorOpen(false);
             }
             toast.success("Đã xóa game.");
         } catch (error) {
@@ -413,7 +455,7 @@ export default function GameOperationsWorkspace() {
                 </div>
             </section>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.22fr)_320px]">
+            <div className="grid gap-4">
                 <section className="space-y-4">
                     <div className="rounded-[1.15rem] border border-[var(--app-border)] bg-white/96 p-3 shadow-[0_8px_18px_rgba(77,157,255,0.07)]">
                         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
@@ -489,7 +531,7 @@ export default function GameOperationsWorkspace() {
                                 </div>
                             ) : filteredGames.length > 0 ? (
                                 filteredGames.map((game) => {
-                                    const selected = game?.id === selectedGameId;
+                                    const selected = isEditorOpen && game?.id === selectedGameId;
                                     const imageSrc = toImageSrc(game?.thumbnail);
                                     const posterSrc = toImageSrc(game?.poster);
 
@@ -605,172 +647,251 @@ export default function GameOperationsWorkspace() {
                     </section>
                 </section>
 
-                <section className="rounded-[1.7rem] border border-[var(--app-border)] bg-white/96 p-5 shadow-[0_14px_30px_rgba(77,157,255,0.07)] xl:sticky xl:top-5 xl:self-start">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
-                            <p className="page-kicker">{selectedGameId ? "Sửa game" : "Game mới"}</p>
-                            <h2 className="section-title mt-2">
-                                {selectedGameId ? "Panel chỉnh sửa" : "Tạo game thủ công"}
-                            </h2>
-                        </div>
-                        {selectedGameId ? (
-                            <button
-                                type="button"
-                                onClick={openCreate}
-                                className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 transition hover:text-sky-700"
-                            >
-                                Tạo mới
-                            </button>
-                        ) : null}
-                    </div>
-
-                    {activeGame ? (
-                        <div className="mt-4 rounded-[1.3rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.7)] p-3.5">
-                            <p className="meta-label text-slate-500">Nguồn API hiện tại</p>
-                            <p className="mt-2 text-sm font-black text-slate-900">
-                                {activeGame?.api_name || activeGame?.name || "Chưa có"}
-                            </p>
-                            <p className="copy-xs mt-2 text-slate-500">
-                                Gamecode: {activeGame?.gamecode || "Chưa có"} {" • "}
-                                Thumbnail API: {activeGame?.api_thumbnail ? "Có" : "Không"}
-                            </p>
-                        </div>
-                    ) : null}
-
-                    <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-                        <label className="block space-y-2">
-                            <span className="meta-label text-slate-500">Tên hiển thị</span>
-                            <input
-                                type="text"
-                                value={formData.custom_name}
-                                onChange={(event) =>
-                                    setFormData((prev) => ({ ...prev, custom_name: event.target.value }))
-                                }
-                                placeholder="Liên Quân Mobile"
-                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
-                            />
-                        </label>
-
-                        <label className="block space-y-2">
-                            <span className="meta-label text-slate-500">Gamecode</span>
-                            <input
-                                type="text"
-                                value={formData.gamecode}
-                                onChange={(event) =>
-                                    setFormData((prev) => ({ ...prev, gamecode: event.target.value }))
-                                }
-                                placeholder="lien-quan"
-                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
-                            />
-                        </label>
-
-                        <label className="block space-y-2">
-                            <span className="meta-label text-slate-500">Nhà phát hành</span>
-                            <input
-                                type="text"
-                                value={formData.publisher}
-                                onChange={(event) =>
-                                    setFormData((prev) => ({ ...prev, publisher: event.target.value }))
-                                }
-                                placeholder="Garena"
-                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
-                            />
-                        </label>
-
-                        <label className="block space-y-2">
-                            <span className="meta-label text-slate-500">Danh sách server</span>
-                            <textarea
-                                value={formData.server_text}
-                                onChange={(event) =>
-                                    setFormData((prev) => ({ ...prev, server_text: event.target.value }))
-                                }
-                                rows={4}
-                                placeholder={"VN\nS1\nS2"}
-                                className="w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
-                            />
-                        </label>
-
-                        <label className="flex items-center justify-between gap-4 rounded-[1.2rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 py-2.5">
-                            <div>
-                                <p className="text-sm font-black text-slate-900">Đánh dấu game hot</p>
-                                <p className="copy-xs mt-1 text-slate-500">
-                                    Ưu tiên hiển thị ở homepage và cụm game nổi bật.
-                                </p>
-                            </div>
-                            <input
-                                type="checkbox"
-                                checked={Boolean(formData.is_hot)}
-                                onChange={(event) =>
-                                    setFormData((prev) => ({ ...prev, is_hot: event.target.checked }))
-                                }
-                                className="h-5 w-5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                            />
-                        </label>
-
-                        <UploadField
-                            id="game-thumbnail-upload"
-                            label="Thumbnail dọc"
-                            hint="Dùng cho card game và danh sách."
-                            preview={thumbnailPreview}
-                            onChange={(event) => handleFilePick(event, "thumbnail")}
-                            onClear={() => {
-                                setThumbnailFile(null);
-                                setThumbnailPreview(toImageSrc(activeGame?.api_thumbnail));
-                                setClearThumbnailOverride(true);
-                            }}
-                            clearLabel="Dùng ảnh API"
-                        />
-
-                        <UploadField
-                            id="game-poster-upload"
-                            label="Poster ngang"
-                            hint="Dùng cho hero trang nạp game và ảnh chia sẻ."
-                            preview={posterPreview}
-                            onChange={(event) => handleFilePick(event, "poster")}
-                            onClear={() => {
-                                setPosterFile(null);
-                                setPosterPreview("");
-                                setClearPosterOverride(true);
-                            }}
-                            clearLabel="Xóa poster"
-                        />
-
-                        <div className="rounded-[1.3rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.65)] p-3.5">
-                            <p className="meta-label text-slate-500">Ghi chú</p>
-                            <p className="copy-xs mt-2 text-slate-500">
-                                Cron vẫn lấy dữ liệu mới từ API. Những gì admin chỉnh ở đây sẽ được giữ để
-                                không bị cập nhật ghi đè.
-                            </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="inline-flex min-h-[42px] flex-1 items-center justify-center gap-2 rounded-full bg-sky-600 px-5 text-sm font-black text-white transition hover:bg-sky-700 disabled:opacity-60"
-                            >
-                                {submitting ? <FiLoader className="animate-spin" /> : <FiSave size={15} />}
-                                {selectedGameId ? "Lưu thay đổi" : "Tạo game"}
-                            </button>
-                            {selectedGameId ? (
-                                <button
-                                    type="button"
-                                    onClick={() => handleDeleteGame(activeGame)}
-                                    disabled={deletingId === selectedGameId}
-                                    className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
-                                >
-                                    {deletingId === selectedGameId ? (
-                                        <FiLoader className="animate-spin" />
-                                    ) : (
-                                        <FiTrash2 size={15} />
-                                    )}
-                                    Xóa game
-                                </button>
-                            ) : null}
-                        </div>
-                    </form>
-                </section>
             </div>
+            <AnimatePresence>
+                {isEditorOpen ? (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[90] flex items-start justify-center bg-[rgba(15,23,42,0.34)] px-3 py-4 backdrop-blur-[8px] sm:px-5 sm:py-6"
+                        onClick={closeEditor}
+                    >
+                        <motion.section
+                            initial={{ opacity: 0, y: 28, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                            onClick={(event) => event.stopPropagation()}
+                            className="flex max-h-[calc(100svh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-[rgba(255,255,255,0.98)] shadow-[0_30px_80px_rgba(15,23,42,0.24)]"
+                        >
+                            <div className="flex items-start justify-between gap-4 border-b border-[rgba(148,163,184,0.16)] bg-[linear-gradient(135deg,rgba(239,247,255,0.96),rgba(255,255,255,0.98))] px-5 py-4 sm:px-6">
+                                <div className="min-w-0">
+                                    <p className="page-kicker">{selectedGameId ? "Sửa game" : "Game mới"}</p>
+                                    <h2 className="section-title mt-2">
+                                        {selectedGameId ? "Chỉnh sửa game" : "Tạo game thủ công"}
+                                    </h2>
+                                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                                        Chỉnh nhanh tên hiển thị, ảnh local và trạng thái hot mà không làm rối workspace.
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {selectedGameId ? (
+                                        <button
+                                            type="button"
+                                            onClick={openCreate}
+                                            className="inline-flex min-h-[36px] items-center rounded-full border border-[var(--app-border)] bg-white px-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 transition hover:bg-slate-50"
+                                        >
+                                            Tạo mới
+                                        </button>
+                                    ) : null}
+                                    <button
+                                        type="button"
+                                        onClick={closeEditor}
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--app-border)] bg-white text-slate-500 transition hover:border-sky-200 hover:text-sky-700"
+                                        aria-label="Đóng popup chỉnh sửa game"
+                                    >
+                                        <FiX size={16} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+                                <div className="space-y-4 overflow-y-auto border-b border-[rgba(148,163,184,0.16)] bg-[rgba(244,249,255,0.74)] px-5 py-5 sm:px-6 lg:border-b-0 lg:border-r">
+                                    {activeGame ? (
+                                        <div className="rounded-[1.4rem] border border-[var(--app-border)] bg-white/92 p-4 shadow-[0_10px_24px_rgba(77,157,255,0.08)]">
+                                            <p className="meta-label text-slate-500">Nguồn API hiện tại</p>
+                                            <p className="mt-2 text-base font-black tracking-tight text-slate-950">
+                                                {activeGame?.api_name || activeGame?.name || "Chưa có"}
+                                            </p>
+                                            <p className="copy-xs mt-2 text-slate-500">
+                                                Gamecode: {activeGame?.gamecode || "Chưa có"} {" • "}
+                                                Thumbnail API: {activeGame?.api_thumbnail ? "Có" : "Không"}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-[1.4rem] border border-dashed border-[var(--app-border)] bg-white/72 p-4">
+                                            <p className="meta-label text-slate-500">Tạo game thủ công</p>
+                                            <p className="mt-2 text-sm font-black text-slate-900">
+                                                Nhập tên hiển thị, gamecode và ảnh local cho game mới.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="rounded-[1.25rem] border border-[var(--app-border)] bg-white/88 p-4">
+                                            <p className="meta-label text-slate-500">Thumbnail dọc</p>
+                                            <p className="mt-2 text-sm font-semibold text-slate-900">
+                                                Dùng cho card game và danh sách.
+                                            </p>
+                                            <p className="copy-xs mt-2 text-slate-500">
+                                                Giữ ảnh API hoặc tải ảnh local riêng cho SnowTopup.
+                                            </p>
+                                        </div>
+                                        <div className="rounded-[1.25rem] border border-[var(--app-border)] bg-white/88 p-4">
+                                            <p className="meta-label text-slate-500">Poster ngang</p>
+                                            <p className="mt-2 text-sm font-semibold text-slate-900">
+                                                Dùng cho hero trang nạp game và ảnh chia sẻ.
+                                            </p>
+                                            <p className="copy-xs mt-2 text-slate-500">
+                                                Popup này giữ trọn phần preview để chỉnh ảnh nhanh hơn.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-[1.4rem] border border-[var(--app-border)] bg-white/88 p-4">
+                                        <p className="meta-label text-slate-500">Ghi chú</p>
+                                        <p className="copy-xs mt-2 text-slate-500">
+                                            Cron vẫn lấy dữ liệu mới từ API. Những gì admin chỉnh ở đây sẽ được giữ để
+                                            không bị cập nhật ghi đè.
+                                        </p>
+                                        <p className="copy-xs mt-2 text-slate-500">
+                                            Nhấn <span className="font-black text-slate-700">Esc</span> hoặc bấm ra ngoài
+                                            để đóng popup.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <form onSubmit={handleSubmit} className="min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <label className="block space-y-2 sm:col-span-2">
+                                            <span className="meta-label text-slate-500">Tên hiển thị</span>
+                                            <input
+                                                type="text"
+                                                value={formData.custom_name}
+                                                onChange={(event) =>
+                                                    setFormData((prev) => ({ ...prev, custom_name: event.target.value }))
+                                                }
+                                                placeholder="Liên Quân Mobile"
+                                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
+                                            />
+                                        </label>
+
+                                        <label className="block space-y-2">
+                                            <span className="meta-label text-slate-500">Gamecode</span>
+                                            <input
+                                                type="text"
+                                                value={formData.gamecode}
+                                                onChange={(event) =>
+                                                    setFormData((prev) => ({ ...prev, gamecode: event.target.value }))
+                                                }
+                                                placeholder="lien-quan"
+                                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
+                                            />
+                                        </label>
+
+                                        <label className="block space-y-2">
+                                            <span className="meta-label text-slate-500">Nhà phát hành</span>
+                                            <input
+                                                type="text"
+                                                value={formData.publisher}
+                                                onChange={(event) =>
+                                                    setFormData((prev) => ({ ...prev, publisher: event.target.value }))
+                                                }
+                                                placeholder="Garena"
+                                                className="h-11 w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
+                                            />
+                                        </label>
+
+                                        <label className="block space-y-2 sm:col-span-2">
+                                            <span className="meta-label text-slate-500">Danh sách server</span>
+                                            <textarea
+                                                value={formData.server_text}
+                                                onChange={(event) =>
+                                                    setFormData((prev) => ({ ...prev, server_text: event.target.value }))
+                                                }
+                                                rows={4}
+                                                placeholder={"VN\nS1\nS2"}
+                                                className="w-full rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 py-3 text-sm font-medium text-slate-900 outline-none transition focus:border-sky-300 focus:bg-white"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <label className="mt-4 flex items-center justify-between gap-4 rounded-[1.2rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] px-4 py-3">
+                                        <div>
+                                            <p className="text-sm font-black text-slate-900">Đánh dấu game hot</p>
+                                            <p className="copy-xs mt-1 text-slate-500">
+                                                Ưu tiên hiển thị ở homepage và cụm game nổi bật.
+                                            </p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={Boolean(formData.is_hot)}
+                                            onChange={(event) =>
+                                                setFormData((prev) => ({ ...prev, is_hot: event.target.checked }))
+                                            }
+                                            className="h-5 w-5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                        />
+                                    </label>
+
+                                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                                        <UploadField
+                                            id="game-thumbnail-upload"
+                                            label="Thumbnail dọc"
+                                            hint="Dùng cho card game và danh sách."
+                                            preview={thumbnailPreview}
+                                            onChange={(event) => handleFilePick(event, "thumbnail")}
+                                            onClear={() => {
+                                                setThumbnailFile(null);
+                                                setThumbnailPreview(toImageSrc(activeGame?.api_thumbnail));
+                                                setClearThumbnailOverride(true);
+                                            }}
+                                            clearLabel="Dùng ảnh API"
+                                        />
+
+                                        <UploadField
+                                            id="game-poster-upload"
+                                            label="Poster ngang"
+                                            hint="Dùng cho hero trang nạp game và ảnh chia sẻ."
+                                            preview={posterPreview}
+                                            onChange={(event) => handleFilePick(event, "poster")}
+                                            onClear={() => {
+                                                setPosterFile(null);
+                                                setPosterPreview("");
+                                                setClearPosterOverride(true);
+                                            }}
+                                            clearLabel="Xóa poster"
+                                        />
+                                    </div>
+
+                                    <div className="mt-5 flex flex-wrap justify-end gap-3 border-t border-[rgba(148,163,184,0.16)] pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={closeEditor}
+                                            className="inline-flex min-h-[42px] items-center justify-center rounded-full border border-[var(--app-border)] bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                                        >
+                                            Đóng
+                                        </button>
+                                        {selectedGameId ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteGame(activeGame)}
+                                                disabled={deletingId === selectedGameId}
+                                                className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+                                            >
+                                                {deletingId === selectedGameId ? (
+                                                    <FiLoader className="animate-spin" />
+                                                ) : (
+                                                    <FiTrash2 size={15} />
+                                                )}
+                                                Xóa game
+                                            </button>
+                                        ) : null}
+                                        <button
+                                            type="submit"
+                                            disabled={submitting}
+                                            className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-full bg-sky-600 px-5 text-sm font-black text-white transition hover:bg-sky-700 disabled:opacity-60"
+                                        >
+                                            {submitting ? <FiLoader className="animate-spin" /> : <FiSave size={15} />}
+                                            {selectedGameId ? "Lưu thay đổi" : "Tạo game"}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </motion.section>
+                    </motion.div>
+                ) : null}
+            </AnimatePresence>
         </AdminWorkspaceShell>
     );
 }

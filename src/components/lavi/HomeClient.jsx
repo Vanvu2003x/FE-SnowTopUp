@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useMemo, useState } from "react";
 import { FiCompass, FiSearch } from "react-icons/fi";
 
 const baseApiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -25,10 +25,10 @@ const reveal = {
     }),
 };
 
-function toImageSrc(thumbnail) {
-    if (!thumbnail) return "";
-    if (thumbnail.startsWith("http")) return thumbnail;
-    return `${baseApiUrl || ""}${thumbnail}`;
+function toImageSrc(value) {
+    if (!value) return "";
+    if (String(value).startsWith("http")) return value;
+    return `${baseApiUrl || ""}${value}`;
 }
 
 function getHeroImage(game) {
@@ -44,6 +44,7 @@ function getMetaLabel(game) {
 export default function HomeClient({ games = [] }) {
     const [query, setQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState("all");
+    const [heroIndex, setHeroIndex] = useState(0);
 
     const topupGames = useMemo(() => {
         if (!Array.isArray(games)) return [];
@@ -62,9 +63,42 @@ export default function HomeClient({ games = [] }) {
         return (flagged.length > 0 ? flagged : topupGames).slice(0, 8);
     }, [topupGames]);
 
-    const heroGame = hotGames[0] || topupGames[0] || null;
-    const sideGames = useMemo(() => hotGames.slice(1, 4), [hotGames]);
+    const heroGames = useMemo(() => {
+        const posterGames = topupGames.filter((game) => Boolean(game?.poster));
+        if (posterGames.length > 0) return posterGames;
+        return hotGames.slice(0, 1);
+    }, [hotGames, topupGames]);
+
+    useEffect(() => {
+        setHeroIndex((prev) => {
+            if (heroGames.length === 0) return 0;
+            return prev % heroGames.length;
+        });
+    }, [heroGames.length]);
+
+    useEffect(() => {
+        if (heroGames.length <= 1) return undefined;
+
+        const timer = window.setInterval(() => {
+            setHeroIndex((prev) => (prev === heroGames.length - 1 ? 0 : prev + 1));
+        }, 4800);
+
+        return () => window.clearInterval(timer);
+    }, [heroGames.length]);
+
+    const heroGame = heroGames[heroIndex] || hotGames[0] || topupGames[0] || null;
     const heroVisual = getHeroImage(heroGame) || "/banner/1.jpg";
+
+    const sideGames = useMemo(() => {
+        if (heroGames.length <= 1) {
+            return hotGames.slice(1, 3);
+        }
+
+        return Array.from({ length: Math.min(2, heroGames.length - 1) }, (_, offset) => {
+            const nextIndex = (heroIndex + offset + 1) % heroGames.length;
+            return heroGames[nextIndex];
+        }).filter(Boolean);
+    }, [heroGames, heroIndex, hotGames]);
 
     const visibleGames = useMemo(() => {
         const keyword = query.trim().toLowerCase();
@@ -94,8 +128,8 @@ export default function HomeClient({ games = [] }) {
                     Chưa có danh mục game
                 </h2>
                 <p className="mx-auto mt-2 max-w-xl text-[0.92rem] leading-6 text-slate-500">
-                    Khi API trả về dữ liệu game topup, trang chủ sẽ tự dựng banner, cụm Game hot và
-                    lưới danh mục bên dưới.
+                    Khi API trả về dữ liệu game topup, trang chủ sẽ tự hiện banner nổi bật, cụm game hot
+                    và lưới danh mục bên dưới.
                 </p>
             </div>
         );
@@ -113,7 +147,7 @@ export default function HomeClient({ games = [] }) {
                 {sideGames[0] ? (
                     <div className="absolute left-0 top-16 hidden h-[76%] w-[22%] -rotate-[7deg] overflow-hidden rounded-[24px] bg-cyan-200/70 shadow-[0_20px_50px_rgba(45,181,191,0.18)] lg:block">
                         <img
-                            src={toImageSrc(sideGames[0].thumbnail)}
+                            src={getHeroImage(sideGames[0]) || toImageSrc(sideGames[0].thumbnail)}
                             alt={sideGames[0].name}
                             className="h-full w-full object-cover opacity-60"
                         />
@@ -123,7 +157,7 @@ export default function HomeClient({ games = [] }) {
                 {sideGames[1] ? (
                     <div className="absolute right-0 top-16 hidden h-[76%] w-[22%] rotate-[7deg] overflow-hidden rounded-[24px] bg-cyan-200/70 shadow-[0_20px_50px_rgba(45,181,191,0.18)] lg:block">
                         <img
-                            src={toImageSrc(sideGames[1].thumbnail)}
+                            src={getHeroImage(sideGames[1]) || toImageSrc(sideGames[1].thumbnail)}
                             alt={sideGames[1].name}
                             className="h-full w-full object-cover opacity-55"
                         />
@@ -137,27 +171,53 @@ export default function HomeClient({ games = [] }) {
                 >
                     <Link
                         href={heroGame?.gamecode ? `/categories/topup/${heroGame.gamecode}` : "#games"}
-                        className="relative block"
+                        className="relative block min-h-[220px] lg:min-h-[340px]"
                     >
-                        <img
-                            src={heroVisual}
-                            alt={heroGame?.name || "Banner SnowTopup"}
-                            className="h-full min-h-[250px] w-full object-cover lg:min-h-[415px]"
-                        />
-                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,7,18,0.78)_0%,rgba(3,7,18,0.26)_48%,rgba(3,7,18,0.08)_100%)]" />
-                        {heroGame ? (
-                            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
-                                <div className="max-w-xl rounded-[22px] bg-white/12 px-5 py-5 backdrop-blur-sm">
-                                    <p className="text-[0.72rem] font-black uppercase tracking-[0.22em] text-white/72">
-                                        SnowTopup chọn nổi bật
-                                    </p>
-                                    <h2 className="mt-3 text-[1.9rem] font-black tracking-[-0.05em] text-white sm:text-[2.4rem]">
-                                        {heroGame.name}
-                                    </h2>
-                                    <p className="mt-2 max-w-lg text-sm leading-6 text-white/80">
-                                        Poster ngang và tên hiển thị do admin chỉnh sẽ được ưu tiên hiển thị ngay trên khu vực này.
-                                    </p>
-                                </div>
+                        <AnimatePresence initial={false} mode="wait">
+                            <motion.div
+                                key={heroGame?.id || heroVisual}
+                                initial={{ opacity: 0, scale: 1.02 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.99 }}
+                                transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+                                className="absolute inset-0"
+                            >
+                                <img
+                                    src={heroVisual}
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="absolute inset-0 h-full w-full scale-[1.06] object-cover blur-xl opacity-35"
+                                />
+                                <img
+                                    src={heroVisual}
+                                    alt={heroGame?.name || "Banner SnowTopup"}
+                                    className="absolute inset-0 h-full w-full object-contain px-2 py-2 sm:px-4 sm:py-3 lg:px-6 lg:py-4"
+                                />
+                            </motion.div>
+                        </AnimatePresence>
+                        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(3,7,18,0.72)_0%,rgba(3,7,18,0.24)_44%,rgba(3,7,18,0.06)_100%)]" />
+                        {heroGames.length > 1 ? (
+                            <div className="absolute bottom-5 right-5 z-10 flex items-center gap-2">
+                                {heroGames.map((game, index) => {
+                                    const isActive = index === heroIndex;
+
+                                    return (
+                                        <button
+                                            key={game?.id || game?.gamecode || index}
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.preventDefault();
+                                                setHeroIndex(index);
+                                            }}
+                                            className={`rounded-full transition-all ${
+                                                isActive
+                                                    ? "h-2.5 w-9 bg-white shadow-[0_6px_18px_rgba(255,255,255,0.28)]"
+                                                    : "h-2.5 w-2.5 bg-white/45 hover:bg-white/72"
+                                            }`}
+                                            aria-label={`Hiện banner ${game?.name || index + 1}`}
+                                        />
+                                    );
+                                })}
                             </div>
                         ) : null}
                     </Link>
