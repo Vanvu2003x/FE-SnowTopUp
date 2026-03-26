@@ -1,5 +1,8 @@
-import { getGames, getGameByGameCode } from "@/services/games.service";
-import { getAllPackageByGameCode } from "@/services/toup_package.service";
+import {
+    getPublicGameByCode,
+    getPublicGames,
+    getPublicPackagesByGameCode,
+} from "@/lib/public-data.server";
 
 import TopUpClient from "./TopUpClient";
 
@@ -15,22 +18,22 @@ export async function generateMetadata({ params }) {
     const { gamecode } = await params;
 
     try {
-        const game = await getGameByGameCode(gamecode);
+        const game = await getPublicGameByCode(gamecode);
         if (game) {
             const shareImage = getImageSrc(game.poster || game.thumbnail);
 
             return {
-                title: `Nạp ${game.name} | SnowTopup`,
-                description: `Nạp ${game.name} tại SnowTopup. Poster ngang, giá gói và thanh toán ví được hiển thị gọn trên cùng một trang.`,
+                title: `Nap ${game.name} | SnowTopup`,
+                description: `Nap ${game.name} tai SnowTopup. Poster ngang, gia goi va thanh toan vi duoc hien thi gon tren cung mot trang.`,
                 openGraph: {
-                    title: `Nạp ${game.name} | SnowTopup`,
-                    description: `Nạp ${game.name} tự động trên SnowTopup.`,
+                    title: `Nap ${game.name} | SnowTopup`,
+                    description: `Nap ${game.name} tu dong tren SnowTopup.`,
                     images: shareImage ? [{ url: shareImage }] : undefined,
                 },
                 twitter: {
                     card: "summary_large_image",
-                    title: `Nạp ${game.name} | SnowTopup`,
-                    description: `Nạp ${game.name} tự động trên SnowTopup.`,
+                    title: `Nap ${game.name} | SnowTopup`,
+                    description: `Nap ${game.name} tu dong tren SnowTopup.`,
                     images: shareImage ? [shareImage] : undefined,
                 },
             };
@@ -40,8 +43,8 @@ export async function generateMetadata({ params }) {
     }
 
     return {
-        title: "Chi tiết nạp game | SnowTopup",
-        description: "Mở gói nạp game trên SnowTopup.",
+        title: "Chi tiet nap game | SnowTopup",
+        description: "Mo goi nap game tren SnowTopup.",
     };
 }
 
@@ -53,9 +56,9 @@ export default async function SnowTopupGamePage({ params }) {
 
     try {
         const [gameData, packagesData, gamesData] = await Promise.all([
-            getGameByGameCode(gamecode),
-            getAllPackageByGameCode(gamecode),
-            getGames(),
+            getPublicGameByCode(gamecode),
+            getPublicPackagesByGameCode(gamecode),
+            getPublicGames(),
         ]);
 
         game = gameData || null;
