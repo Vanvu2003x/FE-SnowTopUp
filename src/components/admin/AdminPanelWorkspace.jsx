@@ -12,24 +12,33 @@ import {
     FiCreditCard,
     FiGrid,
     FiLayers,
+    FiPackage,
     FiRefreshCw,
     FiSearch,
     FiShield,
     FiTrendingUp,
     FiUsers,
+    FiX,
 } from "react-icons/fi";
 
 import { useToast } from "@/components/ui/Toast";
 import { getInfo, sendAdminOTP, updateBalance, verifyAdminOTP } from "@/services/auth.service";
-import { getGames } from "@/services/games.service";
+import { getGames, toggleHotGame } from "@/services/games.service";
 import { getAllOrder, getOrderSummary } from "@/services/order.service";
 import { getRevenueOverview } from "@/services/revenue.service";
 import { getBestSellers, getLeaderboard, getQuickStats } from "@/services/statistics.service";
-import { getListLogsPending, getTopupStats } from "@/services/toup-wallet-logs.service";
+import {
+    getListLogs,
+    getListLogsPending,
+    getTopupStats,
+    manualChargeBalance,
+} from "@/services/toup-wallet-logs.service";
 import { getAllUser } from "@/services/user.service";
 
 const formatCurrency = (value) =>
     `${new Intl.NumberFormat("vi-VN").format(Number(value || 0))} VND`;
+
+const baseApiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 const statusLabelMap = {
     pending: "Chờ xử lý",
@@ -51,6 +60,20 @@ const statusClassMap = {
     cancel: "bg-slate-100 text-slate-600 border border-slate-200",
     cancelled: "bg-slate-100 text-slate-600 border border-slate-200",
     refunded: "bg-violet-50 text-violet-700 border border-violet-100",
+};
+
+const walletStatusLabelMap = {
+    pending: "Chờ xử lý",
+    success: "Thành công",
+    failed: "Thất bại",
+    cancelled: "Đã hủy",
+};
+
+const walletStatusClassMap = {
+    pending: "bg-amber-50 text-amber-700 border border-amber-100",
+    success: "bg-emerald-50 text-emerald-700 border border-emerald-100",
+    failed: "bg-rose-50 text-rose-700 border border-rose-100",
+    cancelled: "bg-slate-100 text-slate-600 border border-slate-200",
 };
 
 function asArray(payload, keys = []) {
@@ -95,6 +118,28 @@ function normalizeStatus(status) {
     return String(status || "pending").toLowerCase();
 }
 
+function normalizeWalletStatus(status) {
+    const normalized = String(status || "pending").trim().toLowerCase();
+
+    if (["đang chờ", "chờ thanh toán", "pending", "wait"].includes(normalized)) {
+        return "pending";
+    }
+
+    if (["thành công", "success", "completed"].includes(normalized)) {
+        return "success";
+    }
+
+    if (["thất bại", "failed", "expired", "expire"].includes(normalized)) {
+        return "failed";
+    }
+
+    if (["đã hủy", "cancel", "cancelled"].includes(normalized)) {
+        return "cancelled";
+    }
+
+    return normalized;
+}
+
 function formatDateTime(value) {
     if (!value) return "Chưa có thời gian";
 
@@ -103,6 +148,12 @@ function formatDateTime(value) {
     } catch {
         return String(value);
     }
+}
+
+function resolveAssetUrl(value) {
+    if (!value) return "";
+    if (String(value).startsWith("http")) return value;
+    return `${baseApiUrl || ""}${value}`;
 }
 
 function extractSeries(payload) {
@@ -185,9 +236,26 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
     const [otpVerified, setOtpVerified] = useState(false);
     const [otpSending, setOtpSending] = useState(false);
     const [otpChecking, setOtpChecking] = useState(false);
+    const [hotUpdatingId, setHotUpdatingId] = useState("");
+    const [walletUpdatingId, setWalletUpdatingId] = useState("");
+    const [walletPage, setWalletPage] = useState(1);
+    const [walletMode, setWalletMode] = useState("all");
+    const [walletSearchInput, setWalletSearchInput] = useState("");
+    const [walletSearchQuery, setWalletSearchQuery] = useState("");
+    const [walletLoading, setWalletLoading] = useState(false);
     const [balanceUserId, setBalanceUserId] = useState("");
     const [balanceAmount, setBalanceAmount] = useState("");
     const [balanceUpdating, setBalanceUpdating] = useState(false);
+    const [walletWorkspace, setWalletWorkspace] = useState({
+        logs: [],
+        allTotal: 0,
+        totalItem: 0,
+        totalPages: 1,
+        pendingTotal: 0,
+        successTotal: 0,
+        failedTotal: 0,
+        cancelledTotal: 0,
+    });
     const [dashboard, setDashboard] = useState({
         orders: [],
         pendingLogs: [],
@@ -206,6 +274,11 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
     useEffect(() => {
         loadDashboard();
     }, []);
+
+    useEffect(() => {
+        if (view !== "wallet" || user?.role !== "admin") return;
+        loadWalletWorkspace();
+    }, [view, user?.role, walletPage, walletMode, walletSearchQuery]);
 
     async function fetchUsersSnapshot() {
         const roles = ["admin", "member", "user", ""];
@@ -318,6 +391,106 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
         }
     }
 
+    async function loadWalletWorkspace() {
+        setWalletLoading(true);
+
+        try {
+            const [
+                logsResult,
+                allResult,
+                pendingResult,
+                successResult,
+                failedResult,
+                cancelledResult,
+            ] =
+                await Promise.allSettled([
+                    getListLogs(walletPage, walletSearchQuery, walletMode),
+                    getListLogs(1, "", "all"),
+                    getListLogs(1, "", "pending"),
+                    getListLogs(1, "", "success"),
+                    getListLogs(1, "", "failed"),
+                    getListLogs(1, "", "cancelled"),
+                ]);
+
+            const logsPayload = logsResult.status === "fulfilled" ? logsResult.value || {} : {};
+
+            setWalletWorkspace({
+                logs: asArray(logsPayload, ["data", "logs", "walletLogs", "items"]),
+                allTotal:
+                    allResult.status === "fulfilled" ? Number(allResult.value?.totalItem || 0) : 0,
+                totalItem: Number(logsPayload?.totalItem || 0),
+                totalPages: Number(logsPayload?.totalPages || 1),
+                pendingTotal:
+                    pendingResult.status === "fulfilled"
+                        ? Number(pendingResult.value?.totalItem || 0)
+                        : 0,
+                successTotal:
+                    successResult.status === "fulfilled"
+                        ? Number(successResult.value?.totalItem || 0)
+                        : 0,
+                failedTotal:
+                    failedResult.status === "fulfilled"
+                        ? Number(failedResult.value?.totalItem || 0)
+                        : 0,
+                cancelledTotal:
+                    cancelledResult.status === "fulfilled"
+                        ? Number(cancelledResult.value?.totalItem || 0)
+                        : 0,
+            });
+        } catch (walletError) {
+            toast.error(walletError?.message || "Khong the tai danh sach nap vi.");
+        } finally {
+            setWalletLoading(false);
+        }
+    }
+
+    async function handleToggleHot(game) {
+        if (!game?.id) return;
+
+        setHotUpdatingId(game.id);
+
+        try {
+            await toggleHotGame(game.id, !Boolean(game?.is_hot));
+            await loadDashboard();
+            toast.success(
+                Boolean(game?.is_hot) ? "Đã gỡ game hot khỏi trang chủ." : "Đã đánh dấu game hot."
+            );
+        } catch (toggleError) {
+            toast.error(toggleError?.message || "Không thể cập nhật trạng thái game hot.");
+        } finally {
+            setHotUpdatingId("");
+        }
+    }
+
+    async function handleWalletStatusChange(log, nextStatus) {
+        if (!log?.id) return;
+
+        setWalletUpdatingId(log.id);
+
+        try {
+            await manualChargeBalance(log.id, nextStatus);
+            await Promise.all([loadDashboard(), loadWalletWorkspace()]);
+
+            const successMessageMap = {
+                "Thành Công": "Đã chuyển giao dịch nạp sang Thành công.",
+                "Thất Bại": "Đã chuyển giao dịch nạp sang Thất bại.",
+                "Đã Hủy": "Đã hủy giao dịch nạp.",
+            };
+
+            toast.success(
+                successMessageMap[nextStatus] || "Đã cập nhật trạng thái giao dịch nạp."
+            );
+        } catch (updateError) {
+            toast.error(
+                updateError?.response?.data?.message ||
+                    updateError?.message ||
+                    "Không thể cập nhật trạng thái giao dịch nạp."
+            );
+        } finally {
+            setWalletUpdatingId("");
+        }
+    }
+
     const revenueSeries = useMemo(() => extractSeries(dashboard.revenue), [dashboard.revenue]);
 
     const filteredOrders = useMemo(() => {
@@ -371,7 +544,11 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
 
     const filteredGames = useMemo(() => {
         const query = deferredQuery.trim().toLowerCase();
-        const items = [...dashboard.games];
+        const items = [...dashboard.games].sort((left, right) => {
+            const hotDelta = Number(Boolean(right?.is_hot)) - Number(Boolean(left?.is_hot));
+            if (hotDelta !== 0) return hotDelta;
+            return String(left?.name || "").localeCompare(String(right?.name || ""));
+        });
 
         if (!query) return items.slice(0, 6);
 
@@ -425,6 +602,30 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
         };
     }, [dashboard]);
 
+    const walletFilterOptions = useMemo(
+        () => [
+            { value: "all", label: "Tất cả", count: walletWorkspace.allTotal },
+            { value: "pending", label: "Chờ xử lý", count: walletWorkspace.pendingTotal },
+            { value: "success", label: "Thành công", count: walletWorkspace.successTotal },
+            { value: "failed", label: "Thất bại", count: walletWorkspace.failedTotal },
+            { value: "cancelled", label: "Đã hủy", count: walletWorkspace.cancelledTotal },
+        ],
+        [walletWorkspace]
+    );
+
+    const walletPageNumbers = useMemo(() => {
+        const totalPages = Math.max(1, Number(walletWorkspace.totalPages || 1));
+        const start = Math.max(1, walletPage - 1);
+        const end = Math.min(totalPages, start + 2);
+        const pages = [];
+
+        for (let page = start; page <= end; page += 1) {
+            pages.push(page);
+        }
+
+        return pages;
+    }, [walletPage, walletWorkspace.totalPages]);
+
     const moduleMap = useMemo(
         () => [
             {
@@ -460,15 +661,15 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                 icon: FiGrid,
             },
             {
-                id: "security",
-                href: "/admin/security",
-                label: "Security",
-                helper: "OTP admin, điểm neo thao tác và điều chỉnh số dư.",
-                value: otpVerified ? "OTP đã xác thực" : "Chưa xác thực OTP",
-                icon: FiShield,
+                id: "packages",
+                href: "/admin/packages",
+                label: "Gói nạp",
+                helper: "Bảng giá theo game, % giá gốc và trạng thái bán.",
+                value: "Theo game",
+                icon: FiPackage,
             },
         ],
-        [otpVerified, stats]
+        [stats]
     );
 
     const pageMeta = {
@@ -491,10 +692,6 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
         games: {
             title: "Quản lý game",
             description: "Kiểm soát danh mục game, gamecode và nhịp bán hiện tại.",
-        },
-        security: {
-            title: "Security & Ví",
-            description: "OTP admin, điều chỉnh số dư và thao tác nhạy cảm.",
         },
     }[view] || {
         title: "Tổng quan vận hành",
@@ -656,7 +853,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                 key={item.href}
                                 href={item.href}
                                 className={`rounded-full px-4 py-2 text-sm font-bold transition ${
-                                    pathname === item.href
+                                    pathname === item.href.split("#")[0].split("?")[0]
                                         ? "bg-sky-600 text-white shadow-md shadow-sky-100/40"
                                         : "border border-[var(--app-border)] bg-white text-slate-700 hover:bg-[rgba(244,249,255,0.85)]"
                                 }`}
@@ -667,31 +864,35 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                     )}
                 </div>
 
-                <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                    <div className="grid gap-4 rounded-[2rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.85)] p-4 sm:grid-cols-2 2xl:grid-cols-4">
-                        {moduleMap.map((item) => {
-                            const Icon = item.icon;
-                            return (
-                                <Link
-                                    key={item.id}
-                                    href={item.href}
-                                    className="group rounded-[1.4rem] bg-white/82 p-4 transition hover:-translate-y-0.5 hover:bg-white"
-                                >
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div>
-                                            <p className="card-title text-slate-900">{item.label}</p>
-                                            <p className="copy-xs mt-2 text-slate-500">{item.helper}</p>
-                                            <p className="mt-3 text-sm font-black text-sky-700">
-                                                {item.value}
-                                            </p>
-                                        </div>
-                                        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[rgba(244,249,255,0.95)] text-sky-600">
-                                            <Icon size={18} />
-                                        </span>
-                                    </div>
-                                </Link>
-                            );
-                        })}
+                {false && <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                    <div>
+                        {view === "overview" && (
+                            <div className="grid gap-4 rounded-[2rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.85)] p-4 sm:grid-cols-2 2xl:grid-cols-4">
+                                {moduleMap.map((item) => {
+                                    const Icon = item.icon;
+                                    return (
+                                        <Link
+                                            key={item.id}
+                                            href={item.href}
+                                            className="group rounded-[1.4rem] bg-white/82 p-4 transition hover:-translate-y-0.5 hover:bg-white"
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <p className="card-title text-slate-900">{item.label}</p>
+                                                    <p className="copy-xs mt-2 text-slate-500">{item.helper}</p>
+                                                    <p className="mt-3 text-sm font-black text-sky-700">
+                                                        {item.value}
+                                                    </p>
+                                                </div>
+                                                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[rgba(244,249,255,0.95)] text-sky-600">
+                                                    <Icon size={18} />
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     <div className="rounded-[2rem] border border-[var(--app-border)] bg-white/85 p-4">
@@ -729,10 +930,10 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                             />
                         </div>
                     </div>
-                </div>
+                </div>}
             </section>
 
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.28fr)_360px]">
+            <div className="space-y-6">
                 <div className="space-y-6">
                     {view === "overview" && (
                         <section className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-6 shadow-[0_18px_42px_rgba(77,157,255,0.07)]">
@@ -759,36 +960,6 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                             <FiArrowRight size={14} className="text-slate-400" />
                                         </div>
                                     </Link>
-                                ))}
-                            </div>
-                        </section>
-                    )}
-
-                    {view === "security" && (
-                        <section className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-6 shadow-[0_18px_42px_rgba(77,157,255,0.07)]">
-                            <div className="flex items-center justify-between gap-4">
-                                <div>
-                                    <p className="page-kicker">Security</p>
-                                    <h2 className="section-title mt-2">Khu thao tác nhạy cảm</h2>
-                                </div>
-                                <span className="meta-label rounded-full bg-[rgba(244,249,255,0.9)] px-3 py-2 text-slate-600">
-                                    OTP + Ví
-                                </span>
-                            </div>
-                            <div className="mt-6 grid gap-3 md:grid-cols-3">
-                                {[
-                                    ["OTP admin", otpVerified ? "Đã xác thực" : "Chưa xác thực", "Xác minh phiên thao tác trước khi đổi số dư."],
-                                    ["Điều chỉnh ví", "Theo user ID", "Nhập số dương để cộng và số âm để trừ."],
-                                    ["Điểm neo", "Điều hướng nhanh", "Đi tới orders, wallet, users và games chỉ bằng một chạm."],
-                                ].map(([label, value, helper]) => (
-                                    <div
-                                        key={label}
-                                        className="rounded-[1.6rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] p-4"
-                                    >
-                                        <p className="card-title text-slate-900">{label}</p>
-                                        <p className="mt-3 text-sm font-black text-sky-700">{value}</p>
-                                        <p className="copy-xs mt-2 text-slate-500">{helper}</p>
-                                    </div>
                                 ))}
                             </div>
                         </section>
@@ -866,7 +1037,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                     </section>
                     )}
 
-                    {view === "wallet" && (
+                    {false && view === "wallet" && (
                     <section
                         id="wallet"
                         className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-6 shadow-[0_18px_42px_rgba(77,157,255,0.07)]"
@@ -882,7 +1053,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                         </div>
 
                         <div className="mt-6 grid gap-3">
-                            {dashboard.pendingLogs.slice(0, 6).map((log) => (
+                            {false && dashboard.pendingLogs.slice(0, 6).map((log) => (
                                 <div
                                     key={log?.id || `${log?.user_id}-${log?.created_at}`}
                                     className="grid gap-3 rounded-[1.6rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] p-4 md:grid-cols-[minmax(0,1fr)_160px]"
@@ -909,6 +1080,94 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                 </div>
                             ))}
 
+                            {dashboard.pendingLogs.slice(0, 6).map((log) => {
+                                const walletStatus = normalizeWalletStatus(log?.status);
+                                const isUpdating = walletUpdatingId === log?.id;
+
+                                return (
+                                    <div
+                                        key={log?.id || `${log?.user_id}-${log?.created_at}`}
+                                        className="rounded-[1.6rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] p-4"
+                                    >
+                                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_170px]">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <p className="card-title truncate text-slate-900">
+                                                        {log?.user?.name ||
+                                                            log?.name_user ||
+                                                            log?.username ||
+                                                            log?.email ||
+                                                            `User #${log?.user_id || "?"}`}
+                                                    </p>
+                                                    <span
+                                                        className={`meta-label rounded-full px-3 py-1.5 ${
+                                                            walletStatusClassMap[walletStatus] ||
+                                                            "bg-slate-100 text-slate-600 border border-slate-200"
+                                                        }`}
+                                                    >
+                                                        {walletStatusLabelMap[walletStatus] ||
+                                                            log?.status ||
+                                                            "Chờ xử lý"}
+                                                    </span>
+                                                </div>
+                                                <p className="copy-xs mt-2 text-slate-500">
+                                                    {log?.note ||
+                                                        log?.description ||
+                                                        `Mã giao dịch: ${log?.id || "chưa có mã"}`}
+                                                </p>
+                                            </div>
+                                            <div className="text-left md:text-right">
+                                                <p className="text-sm font-black text-emerald-700">
+                                                    {formatCurrency(log?.amount || log?.money || 0)}
+                                                </p>
+                                                <p className="copy-xs mt-2 text-slate-500">
+                                                    {formatDateTime(log?.created_at || log?.createdAt)}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--app-border)] pt-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleWalletStatusChange(log, "Thành Công")}
+                                                disabled={isUpdating}
+                                                className={`rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                                                    walletStatus === "success"
+                                                        ? "bg-emerald-600 text-white"
+                                                        : "bg-white text-emerald-700 hover:bg-emerald-50"
+                                                } ${isUpdating ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                                {isUpdating ? "Đang lưu" : "Thành công"}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleWalletStatusChange(log, "Thất Bại")}
+                                                disabled={isUpdating}
+                                                className={`rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                                                    walletStatus === "failed"
+                                                        ? "bg-rose-600 text-white"
+                                                        : "bg-white text-rose-700 hover:bg-rose-50"
+                                                } ${isUpdating ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                                Thất bại
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleWalletStatusChange(log, "Đã Hủy")}
+                                                disabled={isUpdating}
+                                                className={`rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                                                    walletStatus === "cancelled"
+                                                        ? "bg-slate-700 text-white"
+                                                        : "bg-white text-slate-700 hover:bg-slate-100"
+                                                } ${isUpdating ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                                Há»§y
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
                             {dashboard.pendingLogs.length === 0 && (
                                 <div className="rounded-[1.6rem] border border-dashed border-[var(--app-border)] bg-[rgba(244,249,255,0.55)] p-6 text-center">
                                     <p className="card-title">Không có giao dịch nạp ví đang chờ</p>
@@ -917,6 +1176,284 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                     </p>
                                 </div>
                             )}
+                        </div>
+                    </section>
+                    )}
+
+                    {view === "wallet" && (
+                    <section
+                        id="wallet-workspace"
+                        className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-6 shadow-[0_18px_42px_rgba(77,157,255,0.07)]"
+                    >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                            <div className="space-y-2">
+                                <p className="page-kicker">Ví & Topup</p>
+                                <h2 className="section-title">Quản lý giao dịch nạp ví</h2>
+                                <p className="copy-xs max-w-2xl text-slate-500">
+                                    Theo dõi toàn bộ đơn nạp, lọc theo trạng thái và duyệt nhanh
+                                    giao dịch đang chờ trong một màn quản trị duy nhất.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    loadDashboard();
+                                    loadWalletWorkspace();
+                                }}
+                                disabled={walletLoading}
+                                className={`btn-copy inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 py-2.5 text-slate-700 transition hover:bg-[rgba(244,249,255,0.85)] ${
+                                    walletLoading ? "cursor-wait opacity-60" : ""
+                                }`}
+                            >
+                                <FiRefreshCw className={walletLoading ? "animate-spin" : ""} size={14} />
+                                Làm mới ví
+                            </button>
+                        </div>
+
+                        <div className="mt-6 grid gap-3 xl:grid-cols-4">
+                            <div className="rounded-[1.5rem] border border-[var(--app-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98),rgba(244,249,255,0.9))] p-4">
+                                <p className="meta-label text-slate-500">Tổng đơn</p>
+                                <p className="mt-3 text-2xl font-black tracking-tight text-slate-900">
+                                    {walletWorkspace.allTotal}
+                                </p>
+                                <p className="copy-xs mt-2 text-slate-500">
+                                    Tổng số giao dịch nạp ví hiện có trong hệ thống.
+                                </p>
+                            </div>
+                            <div className="rounded-[1.5rem] border border-[var(--app-border)] bg-[linear-gradient(135deg,rgba(255,251,235,0.92),rgba(255,255,255,0.96))] p-4">
+                                <p className="meta-label text-amber-700">Chờ xử lý</p>
+                                <p className="mt-3 text-2xl font-black tracking-tight text-amber-700">
+                                    {walletWorkspace.pendingTotal}
+                                </p>
+                                <p className="copy-xs mt-2 text-slate-500">
+                                    Những giao dịch cần admin xác nhận trạng thái.
+                                </p>
+                            </div>
+                            <div className="rounded-[1.5rem] border border-[var(--app-border)] bg-[linear-gradient(135deg,rgba(236,253,245,0.92),rgba(255,255,255,0.96))] p-4">
+                                <p className="meta-label text-emerald-700">Tổng tiền đã nạp</p>
+                                <p className="mt-3 text-2xl font-black tracking-tight text-emerald-700">
+                                    {formatCurrency(stats.totalTopup)}
+                                </p>
+                                <p className="copy-xs mt-2 text-slate-500">
+                                    Lũy kế giao dịch thành công đã cộng vào ví.
+                                </p>
+                            </div>
+                            <div className="rounded-[1.5rem] border border-[var(--app-border)] bg-[linear-gradient(135deg,rgba(239,246,255,0.92),rgba(255,255,255,0.96))] p-4">
+                                <p className="meta-label text-sky-700">Bộ lọc hiện tại</p>
+                                <p className="mt-3 text-2xl font-black tracking-tight text-sky-700">
+                                    {walletFilterOptions.find((item) => item.value === walletMode)?.label}
+                                </p>
+                                <p className="copy-xs mt-2 text-slate-500">
+                                    Danh sách bên dưới bám theo trạng thái đang chọn.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 rounded-[1.7rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.7)] p-4">
+                            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                                <div className="flex w-full max-w-[14rem] items-center gap-3 rounded-full border border-[var(--app-border)] bg-white px-4 py-3">
+                                    <FiLayers className="text-slate-400" size={15} />
+                                    <select
+                                        value={walletMode}
+                                        onChange={(event) => {
+                                            setWalletMode(event.target.value);
+                                            setWalletPage(1);
+                                        }}
+                                        className="w-full bg-transparent text-[11px] font-black uppercase tracking-[0.14em] text-slate-700 outline-none"
+                                    >
+                                        {walletFilterOptions.map((item) => (
+                                            <option key={item.value} value={item.value}>
+                                                {item.label} ({item.count})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        setWalletPage(1);
+                                        setWalletSearchQuery(walletSearchInput.trim());
+                                    }}
+                                    className="flex w-full flex-col gap-2 sm:flex-row xl:max-w-[29rem]"
+                                >
+                                    <div className="flex flex-1 items-center gap-3 rounded-full border border-[var(--app-border)] bg-white px-4 py-3">
+                                        <FiSearch className="text-slate-400" size={16} />
+                                        <input
+                                            value={walletSearchInput}
+                                            onChange={(event) => setWalletSearchInput(event.target.value)}
+                                            placeholder="Tìm theo mã đơn, email, tên người dùng..."
+                                            className="w-full bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="rounded-full bg-sky-600 px-5 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-white transition hover:bg-sky-700"
+                                    >
+                                        Tìm kiếm
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 overflow-hidden rounded-[1.7rem] border border-[var(--app-border)] bg-white">
+                            <div className="hidden grid-cols-[1.45fr_0.75fr_0.8fr_1fr] gap-4 border-b border-[var(--app-border)] bg-[rgba(244,249,255,0.8)] px-5 py-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 md:grid">
+                                <span>Người dùng / giao dịch</span>
+                                <span>Số tiền</span>
+                                <span>Trạng thái</span>
+                                <span className="text-right">Thao tác</span>
+                            </div>
+
+                            <div className="divide-y divide-[var(--app-border)]">
+                                {walletLoading ? (
+                                    <div className="flex items-center gap-3 px-5 py-8 text-slate-500">
+                                        <FiRefreshCw className="animate-spin text-sky-600" />
+                                        <span className="text-sm font-semibold">
+                                            Đang tải danh sách nạp ví...
+                                        </span>
+                                    </div>
+                                ) : walletWorkspace.logs.length > 0 ? (
+                                    walletWorkspace.logs.map((log) => {
+                                        const walletStatus = normalizeWalletStatus(log?.status);
+                                        const isUpdating = walletUpdatingId === log?.id;
+                                        const isPending = walletStatus === "pending";
+
+                                        return (
+                                            <div
+                                                key={log?.id || `${log?.user_id}-${log?.created_at}`}
+                                                className="grid gap-4 px-5 py-4 md:grid-cols-[1.45fr_0.75fr_0.8fr_1fr] md:items-center"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="card-title truncate text-slate-900">
+                                                        {log?.user?.name ||
+                                                            log?.name_user ||
+                                                            log?.username ||
+                                                            log?.email ||
+                                                            `User #${log?.user_id || "?"}`}
+                                                    </p>
+                                                    <p className="copy-xs mt-2 text-slate-500">
+                                                        {log?.id || "Chưa có mã"} {" • "}
+                                                        {formatDateTime(log?.created_at || log?.createdAt)}
+                                                    </p>
+                                                    {(log?.note || log?.description) && (
+                                                        <p className="copy-xs mt-2 text-slate-500">
+                                                            {log?.note || log?.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div>
+                                                    <p className="text-sm font-black text-emerald-700">
+                                                        {formatCurrency(log?.amount || log?.money || 0)}
+                                                    </p>
+                                                </div>
+
+                                                <div>
+                                                    <span
+                                                        className={`meta-label inline-flex rounded-full px-3 py-2 ${
+                                                            walletStatusClassMap[walletStatus] ||
+                                                            "bg-slate-100 text-slate-600 border border-slate-200"
+                                                        }`}
+                                                    >
+                                                        {walletStatusLabelMap[walletStatus] ||
+                                                            log?.status ||
+                                                            "Chờ xử lý"}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
+                                                    {isPending ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleWalletStatusChange(log, "Thành Công")
+                                                                }
+                                                                disabled={isUpdating}
+                                                                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 transition hover:bg-emerald-100 ${
+                                                                    isUpdating ? "cursor-wait opacity-60" : ""
+                                                                }`}
+                                                                aria-label="Duyet giao dich"
+                                                            >
+                                                                <FiCheckCircle size={17} />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    handleWalletStatusChange(log, "Thất Bại")
+                                                                }
+                                                                disabled={isUpdating}
+                                                                className={`inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100 ${
+                                                                    isUpdating ? "cursor-wait opacity-60" : ""
+                                                                }`}
+                                                                aria-label="Tu choi giao dich"
+                                                            >
+                                                                <FiX size={17} />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="copy-xs rounded-full border border-[var(--app-border)] bg-[rgba(244,249,255,0.78)] px-3 py-2 text-slate-500">
+                                                            Đã khóa thao tác
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="px-5 py-10 text-center">
+                                        <p className="card-title">Không có giao dịch phù hợp</p>
+                                        <p className="copy-xs mt-2 text-slate-500">
+                                            Hãy đổi trạng thái lọc hoặc từ khóa tìm kiếm để xem kết quả khác.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="copy-xs text-slate-500">
+                                Hiển thị trang {walletPage} / {Math.max(1, walletWorkspace.totalPages)} •{" "}
+                                {walletWorkspace.totalItem} giao dịch
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setWalletPage((current) => Math.max(1, current - 1))}
+                                    disabled={walletPage <= 1 || walletLoading}
+                                    className="rounded-full border border-[var(--app-border)] bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Trước
+                                </button>
+                                {walletPageNumbers.map((pageNumber) => (
+                                    <button
+                                        key={pageNumber}
+                                        type="button"
+                                        onClick={() => setWalletPage(pageNumber)}
+                                        className={`h-10 min-w-10 rounded-full px-3 text-[11px] font-black uppercase tracking-[0.14em] transition ${
+                                            walletPage === pageNumber
+                                                ? "bg-sky-600 text-white"
+                                                : "border border-[var(--app-border)] bg-white text-slate-600 hover:bg-slate-50"
+                                        }`}
+                                    >
+                                        {pageNumber}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setWalletPage((current) =>
+                                            Math.min(Math.max(1, walletWorkspace.totalPages), current + 1)
+                                        )
+                                    }
+                                    disabled={
+                                        walletPage >= Math.max(1, walletWorkspace.totalPages) || walletLoading
+                                    }
+                                    className="rounded-full border border-[var(--app-border)] bg-white px-4 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Sau
+                                </button>
+                            </div>
                         </div>
                     </section>
                     )}
@@ -1003,7 +1540,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                         <div className="flex items-center gap-4">
                                             {game?.thumbnail ? (
                                                 <img
-                                                    src={game.thumbnail}
+                                                    src={resolveAssetUrl(game.thumbnail)}
                                                     alt={game?.name || game?.gamecode}
                                                     className="h-12 w-12 rounded-2xl object-cover"
                                                 />
@@ -1022,6 +1559,33 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                                                 </p>
                                             </div>
                                         </div>
+                                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--app-border)] pt-4">
+                                            <span
+                                                className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+                                                    game?.is_hot
+                                                        ? "bg-amber-100 text-amber-700"
+                                                        : "bg-slate-100 text-slate-500"
+                                                }`}
+                                            >
+                                                {game?.is_hot ? "Game hot" : "Chưa ghim"}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleHot(game)}
+                                                disabled={hotUpdatingId === game?.id}
+                                                className={`rounded-full px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] transition ${
+                                                    game?.is_hot
+                                                        ? "bg-slate-900 text-white hover:bg-slate-800"
+                                                        : "bg-white text-sky-700 hover:bg-sky-50"
+                                                } ${hotUpdatingId === game?.id ? "cursor-wait opacity-60" : ""}`}
+                                            >
+                                                {hotUpdatingId === game?.id
+                                                    ? "Đang lưu"
+                                                    : game?.is_hot
+                                                      ? "Gỡ hot"
+                                                      : "Đặt hot"}
+                                            </button>
+                                        </div>
                                     </div>
                                 ))
                             ) : (
@@ -1036,7 +1600,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                     </section>
                     )}
                 </div>
-                <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+                {false && <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
                     <section className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-5 shadow-[0_18px_42px_rgba(77,157,255,0.07)]">
                         <div className="flex items-center justify-between gap-3">
                             <div>
@@ -1166,118 +1730,6 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                         </div>
                     </section>
 
-                    <section
-                        id="security"
-                        className="rounded-[2rem] border border-[var(--app-border)] bg-white/96 p-5 shadow-[0_18px_42px_rgba(77,157,255,0.07)]"
-                    >
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <p className="page-kicker">Security</p>
-                                <h2 className="section-title mt-2">Điều khiển nhanh</h2>
-                            </div>
-                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[rgba(244,249,255,0.9)] text-sky-600">
-                                <FiShield size={18} />
-                            </div>
-                        </div>
-
-                        <div className="mt-5 space-y-4">
-                            <div className="rounded-[1.6rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] p-4">
-                                <p className="card-title">Xác thực OTP admin</p>
-                                <p className="copy-xs mt-2 text-slate-500">
-                                    Gửi OTP để xác thực thao tác nhạy cảm trước khi điều chỉnh số dư.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={handleSendOtp}
-                                    disabled={otpSending}
-                                    className="btn-copy mt-4 inline-flex w-full items-center justify-center rounded-xl bg-sky-600 px-4 py-3 text-white transition hover:bg-sky-700 disabled:opacity-60"
-                                >
-                                    {otpSending ? "Đang gửi OTP..." : "Gửi OTP xác thực"}
-                                </button>
-                                <div className="mt-3 flex gap-2">
-                                    <input
-                                        value={otp}
-                                        onChange={(event) => setOtp(event.target.value)}
-                                        placeholder="Nhập OTP"
-                                        className="h-11 flex-1 rounded-xl border border-[var(--app-border)] bg-white px-4 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleVerifyOtp}
-                                        disabled={otpChecking}
-                                        className="btn-copy rounded-xl border border-[var(--app-border)] bg-white px-4 text-slate-700 transition hover:bg-[rgba(244,249,255,0.8)] disabled:opacity-60"
-                                    >
-                                        {otpChecking ? "..." : "Xác thực"}
-                                    </button>
-                                </div>
-                                <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600">
-                                    {otpVerified ? (
-                                        <>
-                                            <FiCheckCircle className="text-emerald-600" />
-                                            OTP hợp lệ, có thể thao tác số dư.
-                                        </>
-                                    ) : (
-                                        <>
-                                            <FiClock className="text-amber-600" />
-                                            Chưa xác thực OTP trong phiên hiện tại.
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="rounded-[1.6rem] border border-[var(--app-border)] bg-[rgba(244,249,255,0.72)] p-4">
-                                <p className="card-title">Điều chỉnh số dư</p>
-                                <p className="copy-xs mt-2 text-slate-500">
-                                    Nhập user ID và số tiền có dấu. Ví dụ `50000` để cộng, `-50000` để trừ.
-                                </p>
-                                <div className="mt-4 grid gap-3">
-                                    <input
-                                        value={balanceUserId}
-                                        onChange={(event) => setBalanceUserId(event.target.value)}
-                                        placeholder="User ID"
-                                        className="h-11 rounded-xl border border-[var(--app-border)] bg-white px-4 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
-                                    />
-                                    <input
-                                        value={balanceAmount}
-                                        onChange={(event) => setBalanceAmount(event.target.value)}
-                                        placeholder="Số tiền điều chỉnh"
-                                        className="h-11 rounded-xl border border-[var(--app-border)] bg-white px-4 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleBalanceUpdate}
-                                        disabled={balanceUpdating}
-                                        className="btn-copy rounded-xl bg-sky-600 px-4 py-3 text-white transition hover:bg-sky-700 disabled:opacity-60"
-                                    >
-                                        {balanceUpdating ? "Đang cập nhật..." : "Cập nhật số dư"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="rounded-[1.6rem] border border-dashed border-[var(--app-border)] bg-white/72 p-4">
-                                <p className="meta-label text-slate-500">Điểm neo nhanh</p>
-                                <div className="mt-3 space-y-2">
-                                    {[
-                                        ["/admin/orders", "Đơn hàng"],
-                                        ["/admin/wallet", "Nạp ví"],
-                                        ["/admin/users", "Người dùng"],
-                                        ["/admin/games", "Game"],
-                                        ["/admin/security", "Security"],
-                                    ].map(([href, label]) => (
-                                        <Link
-                                            key={href}
-                                            href={href}
-                                            className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-[rgba(244,249,255,0.92)]"
-                                        >
-                                            {label}
-                                            <FiArrowRight size={14} className="text-slate-400" />
-                                        </Link>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-
                     {error && (
                         <section className="rounded-[2rem] border border-amber-100 bg-amber-50/80 p-5 text-amber-900">
                             <div className="flex items-start gap-3">
@@ -1289,7 +1741,7 @@ export default function AdminPanelWorkspace({ view = "overview" }) {
                             </div>
                         </section>
                     )}
-                </aside>
+                </aside>}
             </div>
         </div>
     );

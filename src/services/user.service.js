@@ -26,8 +26,24 @@ export async function changeBalance(id, amount, type) {
   return response.data;
 }
 
-export async function getAllUserByKeyword(role, keyword) {
-  const response = await api.get(`/api/user/search?role=${role}&keyword=${keyword}`);
+export async function changeUserBalance(id, amount, type, description = "") {
+  const response = await api.put(`/api/user/balance`, {
+    userId: id,
+    amount,
+    type,
+    description,
+  });
+  return response.data;
+}
+
+export async function getAllUserByKeyword(role, keyword, page = 1, pageSize = 10) {
+  const params = new URLSearchParams();
+  if (role) params.set("role", role);
+  if (keyword) params.set("keyword", keyword);
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+
+  const response = await api.get(`/api/user/search?${params.toString()}`);
 
   return response.data;
 }

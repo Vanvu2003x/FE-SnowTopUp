@@ -1,4 +1,4 @@
-import AdminPanelWorkspace from "@/components/admin/AdminPanelWorkspace";
+import GameOperationsWorkspace from "@/components/admin/GameOperationsWorkspace";
 
 export const metadata = {
     title: "Admin Games",
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function AdminGamesPage() {
-    return <AdminPanelWorkspace view="games" />;
+    return <GameOperationsWorkspace />;
 }

@@ -1,4 +1,4 @@
-import AdminPanelWorkspace from "@/components/admin/AdminPanelWorkspace";
+import UserOperationsWorkspace from "@/components/admin/UserOperationsWorkspace";
 
 export const metadata = {
     title: "Admin Users",
@@ -6,5 +6,5 @@ export const metadata = {
 };
 
 export default function AdminUsersPage() {
-    return <AdminPanelWorkspace view="users" />;
+    return <UserOperationsWorkspace />;
 }

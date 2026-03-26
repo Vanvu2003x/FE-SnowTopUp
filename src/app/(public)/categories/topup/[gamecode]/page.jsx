@@ -1,7 +1,15 @@
-﻿import { getGames, getGameByGameCode } from "@/services/games.service";
+import { getGames, getGameByGameCode } from "@/services/games.service";
 import { getAllPackageByGameCode } from "@/services/toup_package.service";
 
 import TopUpClient from "./TopUpClient";
+
+const baseApiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+function getImageSrc(value) {
+    if (!value) return "";
+    if (String(value).startsWith("http")) return value;
+    return `${baseApiUrl || ""}${value}`;
+}
 
 export async function generateMetadata({ params }) {
     const { gamecode } = await params;
@@ -9,9 +17,22 @@ export async function generateMetadata({ params }) {
     try {
         const game = await getGameByGameCode(gamecode);
         if (game) {
+            const shareImage = getImageSrc(game.poster || game.thumbnail);
+
             return {
-                title: `Nạp ${game.name}`,
-                description: `Trang nạp ${game.name} - Hệ thống nạp game tự động LaviTopUp.`,
+                title: `Nạp ${game.name} | SnowTopup`,
+                description: `Nạp ${game.name} tại SnowTopup. Poster ngang, giá gói và thanh toán ví được hiển thị gọn trên cùng một trang.`,
+                openGraph: {
+                    title: `Nạp ${game.name} | SnowTopup`,
+                    description: `Nạp ${game.name} tự động trên SnowTopup.`,
+                    images: shareImage ? [{ url: shareImage }] : undefined,
+                },
+                twitter: {
+                    card: "summary_large_image",
+                    title: `Nạp ${game.name} | SnowTopup`,
+                    description: `Nạp ${game.name} tự động trên SnowTopup.`,
+                    images: shareImage ? [shareImage] : undefined,
+                },
             };
         }
     } catch {
@@ -19,12 +40,12 @@ export async function generateMetadata({ params }) {
     }
 
     return {
-        title: "Chi tiết nạp game",
-        description: "Mở gói nạp game trên LaviTopUp.",
+        title: "Chi tiết nạp game | SnowTopup",
+        description: "Mở gói nạp game trên SnowTopup.",
     };
 }
 
-export default async function LaviTopUpPage({ params }) {
+export default async function SnowTopupGamePage({ params }) {
     const { gamecode } = await params;
     let game = null;
     let packages = [];
@@ -41,7 +62,7 @@ export default async function LaviTopUpPage({ params }) {
         packages = Array.isArray(packagesData) ? packagesData : [];
         allGames = Array.isArray(gamesData) ? gamesData.filter((item) => item?.gamecode) : [];
     } catch (error) {
-        console.error("Không thể tải trang nạp game:", error);
+        console.error("Khong the tai trang nap game:", error);
     }
 
     return <TopUpClient game={game} packages={packages} allGames={allGames} />;

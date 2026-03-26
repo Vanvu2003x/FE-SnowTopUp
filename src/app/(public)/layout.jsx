@@ -13,7 +13,7 @@ export default function PublicLayout({ children }) {
         <div className="flex min-h-screen bg-[var(--app-bg)]">
             {/* Sidebar - Desktop */}
             <aside className="hidden w-[280px] shrink-0 lg:block">
-                <div className="sticky top-0 h-screen overflow-y-auto border-r border-[var(--app-border)] bg-[var(--app-bg-soft)]">
+                <div className="scrollbar-hidden sticky top-0 h-screen overflow-y-auto border-r border-[var(--app-border)] bg-[var(--app-bg-soft)]">
                     <SidebarNav />
                 </div>
             </aside>
@@ -38,7 +38,7 @@ export default function PublicLayout({ children }) {
                         className="absolute inset-0 bg-sky-950/20 backdrop-blur-[2px]"
                         onClick={() => setSidebarOpen(false)}
                     />
-                    <div className="absolute left-0 top-0 h-full w-[280px] overflow-y-auto bg-[var(--app-bg-soft)] shadow-2xl">
+                    <div className="scrollbar-hidden absolute left-0 top-0 h-full w-[280px] overflow-y-auto bg-[var(--app-bg-soft)] shadow-2xl">
                         <SidebarNav onNavigate={() => setSidebarOpen(false)} />
                     </div>
                 </div>

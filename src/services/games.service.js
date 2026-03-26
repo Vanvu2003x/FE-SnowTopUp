@@ -38,3 +38,24 @@ export const getGameByGameCode = async (gamecode) => {
   const res = await api.get(`/api/games/game/${gamecode}`)
   return res.data
 }
+
+export const toggleHotGame = async (id, isHot) => {
+  const formData = new FormData();
+  formData.append("info", JSON.stringify({ is_hot: Boolean(isHot) }));
+  return updateGame(id, formData);
+};
+
+export const getGameSyncConfig = async () => {
+  const res = await api.get("/api/games/sync-config");
+  return res.data;
+};
+
+export const updateGameSyncConfig = async (intervalMinutes) => {
+  const res = await api.patch("/api/games/sync-config", { intervalMinutes });
+  return res.data;
+};
+
+export const runGameSyncNow = async () => {
+  const res = await api.post("/api/games/sync-now");
+  return res.data;
+};

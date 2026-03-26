@@ -38,6 +38,7 @@ const iconMap = {
 
 function NavItem({ item, active, onNavigate }) {
     const Icon = iconMap[item.icon] || FiGrid;
+
     return (
         <Link
             href={item.href}
@@ -96,20 +97,6 @@ export default function SidebarNav({ onNavigate }) {
                 </Link>
             </div>
 
-            {user && (
-                <div className="mx-4 mt-6 rounded-2xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.82)] p-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-600 font-bold text-white">
-                            {user.username?.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-slate-900">{user.username}</p>
-                            <p className="text-[10px] font-black uppercase text-sky-600">TV</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <div className="flex-1 overflow-y-auto py-4">
                 {navigationSections.map((section, idx) => (
                     <div key={idx} className="mb-6">
@@ -162,20 +149,42 @@ export default function SidebarNav({ onNavigate }) {
                     </div>
                 )}
 
-                <div className="rounded-xl border border-[var(--app-border)] bg-[rgba(244,249,255,0.86)] p-4">
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                        Hỗ trợ
-                    </p>
-                    <p className="mb-3 text-xs text-slate-600">
-                        Quản lý tài khoản, giao dịch và liên hệ hỗ trợ ngay tại đây.
-                    </p>
-                    <a
-                        href={siteConfig.supportUrl || "#"}
-                        target="_blank"
-                        className="flex w-full items-center justify-center rounded-lg bg-sky-600 py-2 text-xs font-bold text-white shadow-md shadow-sky-100/40 transition hover:bg-sky-700"
-                    >
-                        Hỗ trợ khách hàng
-                    </a>
+                <div className="relative overflow-hidden rounded-[20px] border border-[rgba(201,210,236,0.94)] bg-[linear-gradient(135deg,#f7f5ff_0%,#f2f5ff_48%,#eef8ff_100%)] px-3.5 py-3 shadow-[0_18px_40px_rgba(123,145,193,0.12)]">
+                    <div className="absolute inset-y-0 left-0 w-[40%] bg-[linear-gradient(180deg,#31224f_0%,#49346f_100%)]" />
+                    <div className="absolute left-[34%] top-0 h-full w-24 bg-[radial-gradient(circle_at_left,rgba(173,138,255,0.22),transparent_72%)]" />
+                    <div className="relative flex items-center gap-3">
+                        <div className="relative -mb-3 ml-[-8px] shrink-0 self-end">
+                            <div className="absolute left-4 top-6 h-14 w-14 rounded-full bg-violet-300/25 blur-2xl" />
+                            <img
+                                src="/images/gojo.png"
+                                alt="Gojo"
+                                className="relative h-[110px] w-[84px] object-contain object-left-bottom drop-shadow-[0_10px_20px_rgba(40,20,73,0.34)]"
+                            />
+                        </div>
+
+                        <div className="min-w-0 flex-1 py-1 pl-1.5">
+                            <p className="text-[8px] font-black uppercase tracking-[0.12em] text-slate-500">
+                                Kênh cộng đồng
+                            </p>
+                            <h3 className="mt-1.5 text-[11px] font-semibold leading-4 tracking-[-0.02em] text-slate-700">
+                                Vào nhóm
+                            </h3>
+                            <p className="text-[15px] font-black leading-[1.02] tracking-[-0.045em] text-slate-950">
+                                SnowTopup
+                            </p>
+                            <p className="mt-1 max-w-[136px] text-[9px] font-medium leading-[1.35] text-slate-600">
+                                Tin game hot, hỗ trợ nhanh.
+                            </p>
+                            <a
+                                href={siteConfig.supportUrl || `mailto:${siteConfig.supportEmail}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-3 inline-flex min-h-[34px] min-w-[118px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#46b5e2_0%,#3ec6b1_100%)] px-4 text-[11px] font-bold text-white shadow-[0_12px_24px_rgba(59,202,180,0.22)] transition hover:-translate-y-0.5 hover:brightness-105"
+                            >
+                                Vào nhóm
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

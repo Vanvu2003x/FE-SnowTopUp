@@ -242,6 +242,15 @@ select {
     text-wrap: balance;
   }
 
+  .scrollbar-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+
   .brand-wordmark {
     display: inline-flex;
     align-items: center;

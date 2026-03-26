@@ -9,6 +9,11 @@ export const getRevenueOverview = async () => {
     return result.data;
 };
 
+export const getRevenueDashboard = async () => {
+    const result = await api.get("/api/statistics/revenue/dashboard");
+    return result.data;
+};
+
 /**
  * Get profit margin calculations
  * Returns revenue, cost, profit, and margin percentages

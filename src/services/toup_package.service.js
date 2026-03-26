@@ -38,11 +38,21 @@ export async function updatePkg(id, formData) {
     return res.data;
 }
 export async function changeStatus(id, newStatus) {
-    const apiURL = `/api/toup-package/status?id=${id}`;
+    const apiURL = `/api/toup-package/update-status?id=${id}`;
     const res = await api.patch(apiURL, { newStatus }, {
         headers: {
             "Content-Type": "application/json",
         },
     });
+    return res.data;
+}
+
+export async function getPackagesByGameId(gameId, keyword = "") {
+    const params = new URLSearchParams();
+    params.set("game_id", gameId);
+    if (keyword) params.set("keyword", keyword);
+
+    const apiURL = `/api/toup-package/search?${params.toString()}`;
+    const res = await api.get(apiURL);
     return res.data;
 }

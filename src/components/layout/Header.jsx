@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { FiLogOut, FiMenu, FiSearch, FiUser } from "react-icons/fi";
 
 import BrandLogo from "@/components/layout/BrandLogo";
-import { siteConfig } from "@/config/site";
 import { getInfo, Logout } from "@/services/auth.service";
 
 export default function Header({ onMenuToggle }) {
@@ -75,7 +74,7 @@ export default function Header({ onMenuToggle }) {
                             </Link>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="hidden items-center gap-2 sm:flex">
                             <Link
                                 href="/auth/login"
                                 className="rounded-full px-5 py-2 text-sm font-bold text-slate-600 transition hover:bg-slate-100"

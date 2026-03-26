@@ -142,14 +142,17 @@ export default function TopUpClient({ game, packages = [], allGames = [] }) {
         );
     }
 
-    const heroImage = game.thumbnail?.startsWith("http")
-        ? game.thumbnail
-        : `${baseApiUrl}${game.thumbnail || ""}`;
+    const heroSource = game.poster || game.thumbnail || "";
+    const heroImage = heroSource?.startsWith("http") ? heroSource : `${baseApiUrl}${heroSource || ""}`;
+    const thumbSource = game.thumbnail || game.poster || "";
+    const thumbImage = thumbSource?.startsWith("http")
+        ? thumbSource
+        : `${baseApiUrl}${thumbSource || ""}`;
 
     return (
         <div className="space-y-7 pb-20">
             <section className="relative h-60 overflow-hidden rounded-[2.5rem] border border-[var(--app-border)] bg-white shadow-[0_18px_42px_rgba(77,157,255,0.08)] sm:h-72">
-                {game.thumbnail ? (
+                {heroSource ? (
                     <img src={heroImage} alt={game.name} className="h-full w-full object-cover opacity-90" />
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[rgba(244,249,255,0.9)] text-sky-400">
@@ -160,7 +163,7 @@ export default function TopUpClient({ game, packages = [], allGames = [] }) {
                 <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8">
                     <div className="flex items-center gap-4">
                         <img
-                            src={heroImage}
+                            src={thumbImage || heroImage}
                             alt={game.name}
                             className="h-14 w-14 rounded-2xl border-4 border-white shadow-lg sm:h-20 sm:w-20"
                         />
@@ -170,7 +173,7 @@ export default function TopUpClient({ game, packages = [], allGames = [] }) {
                                 {game.name}
                             </h1>
                             <p className="mt-1 text-xs font-medium text-white/82 sm:text-sm">
-                                Xử lý tự động 24/7, thao tác nhanh và gọn.
+                                Xử lý tự động 24/7, poster ngang và thông tin gói được hiển thị gọn trên cùng một luồng nạp.
                             </p>
                         </div>
                     </div>

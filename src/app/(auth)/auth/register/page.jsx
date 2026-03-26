@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { FiArrowRight, FiLock, FiMail, FiUser } from "react-icons/fi";
@@ -99,14 +98,6 @@ export default function RegisterPage() {
                 </div>
             </form>
 
-            <div className="mt-8 border-t border-sky-50 pt-6 text-center">
-                <p className="copy-sm">
-                    Đã có tài khoản?{" "}
-                    <Link href="/auth/login" className="font-semibold text-sky-600 hover:text-sky-700">
-                        Đăng nhập ngay
-                    </Link>
-                </p>
-            </div>
         </div>
     );
 }

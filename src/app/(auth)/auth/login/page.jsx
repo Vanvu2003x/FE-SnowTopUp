@@ -92,14 +92,6 @@ export default function LoginPage() {
                 </button>
             </form>
 
-            <div className="mt-8 border-t border-sky-50 pt-6 text-center">
-                <p className="copy-sm">
-                    Chưa có tài khoản?{" "}
-                    <Link href="/auth/register" className="font-semibold text-sky-600 hover:text-sky-700">
-                        Tạo tài khoản mới
-                    </Link>
-                </p>
-            </div>
         </div>
     );
 }
