@@ -26,7 +26,11 @@ export default function LoginPage() {
                 localStorage.setItem("balance", String(result.user.balance || 0));
             }
             toast.success("Đăng nhập thành công.");
-            router.push("/account");
+            const nextPath =
+                typeof window !== "undefined"
+                    ? new URLSearchParams(window.location.search).get("next")
+                    : null;
+            router.push(nextPath || "/account");
             router.refresh();
         } catch (error) {
             toast.error(error?.response?.data?.message || "Đăng nhập thất bại.");

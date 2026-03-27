@@ -79,10 +79,12 @@ export const verifyAdminOTP = async (otp) => {
 };
 
 // Cộng / trừ tiền user
-export const updateBalance = async (user_id, amount) => {
+export const updateBalance = async (userId, amount, type = "credit", description = "") => {
     const res = await api.put("/api/user/balance", {
-        user_id,
-        amount
+        userId,
+        amount,
+        type,
+        description,
     });
     return res.data;
 };
